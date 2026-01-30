@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Box, Drawer, Toolbar } from "@mui/material";
 
 import {
@@ -15,14 +15,17 @@ import {
 import GovNavbar from "./GovNavBar";
 import GovFooter from "./GovFooter";
 import GovLeftPanel from "./GovLeftPanel";
+import PageEntrance from "./PageEntrance";
 
-const DRAWER_W = 260;
+const DRAWER_W = 340;
 
 export default function AppShell(props: {
   title: string;
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [role, setRole] = React.useState<EmmaRole | null>(null);
   const [label, setLabel] = React.useState<string>("");
@@ -77,8 +80,6 @@ export default function AppShell(props: {
             background:
               "linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.75))",
             backdropFilter: "blur(10px)",
-
-            /* key fix: start under the AppBar */
             pt: "64px",
             height: "100vh",
           },
@@ -124,7 +125,7 @@ export default function AppShell(props: {
             pb: 3,
           }}
         >
-          {props.children}
+          <PageEntrance animKey={pathname}>{props.children}</PageEntrance>
         </Box>
 
         <Box sx={{ px: { xs: 2, md: 3 }, pb: 2 }}>

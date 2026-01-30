@@ -1,3 +1,4 @@
+// components/shell/GovChatDock.tsx
 "use client";
 
 import * as React from "react";
@@ -19,17 +20,32 @@ export type ChatMessage = {
 };
 
 export default function GovChatDock(props: {
+  open?: boolean;
   initialOpen?: boolean;
   thread?: ChatMessage[];
   onThreadChange?: (updater: (prev: ChatMessage[]) => ChatMessage[]) => void;
   onSubmitAction?: (prompt: string) => void;
+  onOpenChangeAction?: (open: boolean) => void;
+
+  // NEW: allow parent to inject a draft prompt
+  draft?: string;
+  onDraftChangeAction?: (next: string) => void;
 }) {
-  const [open, setOpen] = React.useState(Boolean(props.initialOpen));
-  const [val, setVal] = React.useState("");
+  const isControlled = typeof props.open === "boolean";
+  const [openLocal, setOpenLocal] = React.useState(Boolean(props.initialOpen));
+  const open = isControlled ? Boolean(props.open) : openLocal;
+
+  const isDraftControlled = typeof props.draft === "string";
+  const [draftLocal, setDraftLocal] = React.useState("");
+  const val = isDraftControlled ? (props.draft as string) : draftLocal;
+  const setVal = (next: string) => {
+    if (!isDraftControlled) setDraftLocal(next);
+    props.onDraftChangeAction?.(next);
+  };
+
   const [threadLocal, setThreadLocal] = React.useState<ChatMessage[]>(
     props.thread ?? [],
   );
-
   const thread = props.thread ?? threadLocal;
 
   const setThread =
@@ -38,85 +54,106 @@ export default function GovChatDock(props: {
       setThreadLocal((prev) => updater(prev)));
 
   const listRef = React.useRef<HTMLDivElement | null>(null);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
 
-  // When opened, scroll to bottom after content is visible.
+  const focusInput = React.useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.focus();
+    const len = el.value?.length ?? 0;
+    try {
+      el.setSelectionRange(len, len);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const scrollToBottom = React.useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, []);
+
   React.useEffect(() => {
     if (!open) return;
-    const t = window.setTimeout(() => {
-      const el = listRef.current;
-      if (!el) return;
-      el.scrollTop = el.scrollHeight;
-    }, 220);
-    return () => window.clearTimeout(t);
-  }, [open, thread.length]);
+    requestAnimationFrame(() => requestAnimationFrame(scrollToBottom));
+  }, [open, thread.length, scrollToBottom]);
+
+  // When opened, ensure prompt stays accessible and focused (esp. when injected)
+  React.useEffect(() => {
+    if (!open) return;
+    requestAnimationFrame(() => requestAnimationFrame(focusInput));
+  }, [open, focusInput]);
+
+  const setOpenAndNotify = (next: boolean) => {
+    if (!isControlled) setOpenLocal(next);
+    props.onOpenChangeAction?.(next);
+  };
 
   const submit = () => {
     const prompt = val.trim();
     if (!prompt) return;
 
+    const now = Date.now();
+
     const userMsg: ChatMessage = {
-      id: `user-${Date.now()}`,
+      id: `user-${now}`,
       role: "user",
       content: prompt,
-      createdAt: Date.now(),
+      createdAt: now,
     };
 
     setThread((prev) => [...prev, userMsg]);
     setVal("");
-
     props.onSubmitAction?.(prompt);
 
-    // Local stub assistant reply (for now)
+    requestAnimationFrame(() => requestAnimationFrame(scrollToBottom));
+
     const aiMsg: ChatMessage = {
-      id: `assistant-${Date.now() + 1}`,
+      id: `assistant-${now + 1}`,
       role: "assistant",
       content: "Stub: assistant reply will be wired later.",
-      createdAt: Date.now() + 1,
+      createdAt: now + 1,
     };
+
     window.setTimeout(() => {
       setThread((prev) => [...prev, aiMsg]);
-    }, 350);
+      requestAnimationFrame(() => requestAnimationFrame(scrollToBottom));
+    }, 250);
   };
 
   return (
     <Box
       sx={{
-        // Placed in a flex column; we control vertical claim by state.
-        flex: open ? "0 0 50%" : "0 0 auto",
-        minHeight: open ? 0 : "auto",
-
-        // Panel styling (less bubble-rounded so it behaves like a dock)
-        borderRadius: 2.5,
-        border: "1px solid rgba(10,20,35,0.10)",
+        width: "100%",
+        height: open ? "100%" : "auto",
+        minHeight: 0,
+        display: "flex",
+        flexDirection: "column",
         background:
-          "linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.72))",
+          "linear-gradient(180deg, rgba(255,255,255), rgba(255,255,255))",
         boxShadow: open
           ? "0 18px 34px rgba(10,20,35,0.18)"
           : "0 10px 22px rgba(10,20,35,0.14)",
         backdropFilter: "blur(10px)",
-
-        // Accordion behavior (two states only). Never cap so low that the input gets clipped.
-        maxHeight: open ? "calc(100vh - 120px)" : 84,
-        transition:
-          "max-height 220ms ease, box-shadow 220ms ease, border-radius 220ms ease",
+        overflow: "hidden",
       }}
     >
-      {/* Closed state: show ONLY the button */}
       {!open ? (
         <Box sx={{ p: 2 }}>
           <Button
             fullWidth
-            onClick={() => setOpen(true)}
+            onClick={() => setOpenAndNotify(true)}
             startIcon={<MessageSquare size={18} />}
             disableElevation
             sx={{
               textTransform: "none",
-              borderRadius: 999,
               py: 1.2,
               fontWeight: 850,
               color: "#fff",
               background: "linear-gradient(180deg, #1f6feb, #195fd0)",
               border: "1px solid rgba(10,20,35,0.18)",
+              borderRadius: 999,
               boxShadow:
                 "0 12px 26px rgba(10,20,35,0.20), inset 0 1px 0 rgba(255,255,255,0.25)",
               "&:hover": {
@@ -133,18 +170,16 @@ export default function GovChatDock(props: {
           </Button>
         </Box>
       ) : (
-        // Open state
         <Box
           sx={{
-            height: "100%",
+            flex: 1,
+            minHeight: 0,
             display: "flex",
             flexDirection: "column",
-            minHeight: 0,
-            overflow: "hidden", // important: thread scrolls; prompt stays reachable
           }}
         >
-          {/* Header row */}
-          <Box sx={{ px: 2.25, pt: 2, pb: 1.5 }}>
+          {/* Header */}
+          <Box sx={{ px: 2.25, pt: 2, pb: 1.5, flex: "0 0 auto" }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.25 }}>
               <Box
                 sx={{
@@ -155,6 +190,7 @@ export default function GovChatDock(props: {
                   display: "grid",
                   placeItems: "center",
                   border: "1px solid rgba(31,111,235,0.22)",
+                  flex: "0 0 auto",
                 }}
               >
                 <MessageSquare size={16} color="rgba(25,95,208,0.95)" />
@@ -172,7 +208,7 @@ export default function GovChatDock(props: {
               </Box>
 
               <Button
-                onClick={() => setOpen(false)}
+                onClick={() => setOpenAndNotify(false)}
                 startIcon={<MessageSquare size={16} />}
                 disableElevation
                 sx={{
@@ -198,58 +234,55 @@ export default function GovChatDock(props: {
 
           <Divider />
 
-          {/* Content wrapper: delay opacity so thread does NOT peek during expand */}
+          {/* Thread + pinned prompt */}
           <Box
             sx={{
               flex: 1,
               minHeight: 0,
-              display: "flex",
-              flexDirection: "column",
+              position: "relative",
+              overflow: "hidden",
               px: 2,
               pt: 1.75,
-              pb: 2,
-              opacity: 0,
-              animation: "emmaChatFadeIn 160ms ease forwards",
-              animationDelay: "200ms",
-              "@keyframes emmaChatFadeIn": {
-                to: { opacity: 1 },
-              },
-              overflow: "hidden", // ensure only the thread box scrolls
             }}
           >
-            {/* Thread area */}
             <Box
               ref={listRef}
               sx={{
-                flex: 1,
-                minHeight: 0,
+                height: "100%",
                 overflowY: "auto",
-                borderRadius: 2.5,
-                border: "1px solid rgba(10,20,35,0.10)",
                 background: "rgba(255,255,255,0.72)",
                 px: 1.5,
                 py: 1.25,
+                pb: "140px",
+                borderTop: "1px solid rgba(10,20,35,0.06)",
               }}
             >
-              {thread.length === 0 ? (
-                <Box
-                  sx={{
-                    borderRadius: 2.5,
-                    px: 2,
-                    py: 1.25,
-                    border: "1px dashed rgba(10,20,35,0.18)",
-                    background: "rgba(255,255,255,0.60)",
-                    color: "rgba(10,20,35,0.55)",
-                    lineHeight: 1.35,
-                  }}
-                >
-                  No thread yet. Send a message to start.
-                </Box>
-              ) : (
-                <Box
-                  sx={{ display: "flex", flexDirection: "column", gap: 1.1 }}
-                >
-                  {thread.map((m) => {
+              <Box
+                sx={{
+                  minHeight: "100%",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "flex-end",
+                  gap: 1.1,
+                }}
+              >
+                {thread.length === 0 ? (
+                  <Box
+                    sx={{
+                      borderRadius: 2.5,
+                      px: 2,
+                      py: 1.25,
+                      border: "1px dashed rgba(10,20,35,0.18)",
+                      background: "rgba(255,255,255,0.60)",
+                      color: "rgba(10,20,35,0.55)",
+                      lineHeight: 1.35,
+                      alignSelf: "stretch",
+                    }}
+                  >
+                    No thread yet. Send a message to start.
+                  </Box>
+                ) : (
+                  thread.map((m) => {
                     const isUser = m.role === "user";
                     return (
                       <Box
@@ -271,13 +304,13 @@ export default function GovChatDock(props: {
                               ? {
                                   color: "#fff",
                                   background: "rgba(31,111,235,0.92)",
-                                  borderTopRightRadius: 10,
+                                  borderTopRightRadius: 12,
                                 }
                               : {
                                   color: "rgba(10,20,35,0.82)",
                                   background: "rgba(255,255,255,0.78)",
                                   border: "1px solid rgba(10,20,35,0.10)",
-                                  borderTopLeftRadius: 10,
+                                  borderTopLeftRadius: 12,
                                 }),
                           }}
                         >
@@ -285,13 +318,26 @@ export default function GovChatDock(props: {
                         </Box>
                       </Box>
                     );
-                  })}
-                </Box>
-              )}
+                  })
+                )}
+              </Box>
             </Box>
 
-            {/* Prompt row */}
-            <Box sx={{ mt: 1.5 }}>
+            <Box
+              sx={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: 0,
+                pt: 1.25,
+                pb: 1.25,
+                px: 2,
+                background:
+                  "linear-gradient(180deg, rgba(255,255,255), rgba(255,255,255) 25%, rgba(255,255,255))",
+                backdropFilter: "blur(10px)",
+                borderTop: "1px solid rgba(10,20,35,0.08)",
+              }}
+            >
               <Typography
                 sx={{
                   fontSize: 12,
@@ -317,6 +363,7 @@ export default function GovChatDock(props: {
                 }}
               >
                 <TextField
+                  inputRef={inputRef}
                   value={val}
                   onChange={(e) => setVal(e.target.value)}
                   placeholder="What do you need?"
@@ -329,13 +376,7 @@ export default function GovChatDock(props: {
                       submit();
                     }
                   }}
-                  sx={{
-                    px: 1.25,
-                    "& input": {
-                      fontSize: 14,
-                      py: 0.6,
-                    },
-                  }}
+                  sx={{ px: 1.25, "& input": { fontSize: 14, py: 0.6 } }}
                 />
 
                 {val.trim() ? (

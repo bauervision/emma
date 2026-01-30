@@ -1,3 +1,4 @@
+// components/shell/GovLeftPanel.tsx
 "use client";
 
 import * as React from "react";
@@ -13,6 +14,12 @@ import {
 
 import { type EmmaRole } from "@/lib/auth";
 import GovChatDock, { type ChatMessage } from "./GovChatDock";
+import LeftInfoTabs, { type InfoTabKey } from "./LeftInfoTabs";
+import {
+  InfoAuditPanel,
+  InfoContextPanel,
+  InfoQuickPanel,
+} from "./LeftInfoPanels";
 
 type NavItem = { label: string; href: string; roles: EmmaRole[] };
 
@@ -29,8 +36,8 @@ const NAV: NavItem[] = [
 
 export default function GovLeftPanel(props: {
   role: EmmaRole | null;
-  label: string; // kept for later, unused for now
-  onLogoutAction: () => void; // kept for later, unused here now
+  label: string;
+  onLogoutAction: () => void;
   onNavAction?: () => void;
 }) {
   const pathname = usePathname();
@@ -41,6 +48,15 @@ export default function GovLeftPanel(props: {
   }, [props.role]);
 
   const [thread, setThread] = React.useState<ChatMessage[]>([]);
+  const [chatOpen, setChatOpen] = React.useState(false);
+  const [tab, setTab] = React.useState<InfoTabKey>("context");
+
+  const [draft, setDraft] = React.useState("");
+
+  const handleTabChangeAction = (next: InfoTabKey) => {
+    setTab(next);
+    if (chatOpen) setChatOpen(false);
+  };
 
   return (
     <Box
@@ -49,10 +65,11 @@ export default function GovLeftPanel(props: {
         display: "flex",
         flexDirection: "column",
         minHeight: 0,
+        overflow: "hidden",
       }}
     >
       {/* Top nav */}
-      <Box sx={{ px: 1.5, pt: 1.25, pb: 1.25 }}>
+      <Box sx={{ px: 1.5, pt: 1.25, pb: 1.25, flex: "0 0 auto" }}>
         <List sx={{ py: 0 }}>
           {items.map((n) => {
             const active = pathname === n.href;
@@ -63,18 +80,11 @@ export default function GovLeftPanel(props: {
                 href={n.href}
                 selected={active}
                 onClick={() => props.onNavAction?.()}
-                sx={{
-                  borderRadius: 3,
-                  mb: 0.75,
-                  px: 1.75,
-                  py: 1.1,
-                }}
+                sx={{ borderRadius: 2, mb: 0.75, px: 1.75, py: 1.1 }}
               >
                 <ListItemText
                   primary={n.label}
-                  primaryTypographyProps={{
-                    fontWeight: active ? 950 : 850,
-                  }}
+                  primaryTypographyProps={{ fontWeight: active ? 950 : 850 }}
                 />
               </ListItemButton>
             );
@@ -84,18 +94,55 @@ export default function GovLeftPanel(props: {
 
       <Divider />
 
-      {/* Spacer that will shrink when chat opens (because chat takes 50%) */}
-      <Box sx={{ flex: 1, minHeight: 0 }} />
+      {/* Tabs (always visible) */}
+      <Box sx={{ px: 1.5, pt: 1.1, pb: 1.1, flex: "0 0 auto" }}>
+        <LeftInfoTabs value={tab} onChangeAction={handleTabChangeAction} />
+      </Box>
 
-      {/* Bottom chat dock (2 states only) */}
-      <Box sx={{ px: 1.5, pb: 1.5 }}>
+      {/* Above-dock region */}
+      <Box sx={{ flex: 1, minHeight: 0, overflow: "hidden", px: 1.5, pb: 1.5 }}>
+        {chatOpen ? (
+          <Box sx={{ height: "100%" }} />
+        ) : (
+          <Box sx={{ height: "100%", overflowY: "auto" }}>
+            {tab === "context" ? (
+              <InfoContextPanel role={props.role} pathname={pathname} />
+            ) : null}
+            {tab === "audit" ? <InfoAuditPanel /> : null}
+            {tab === "quick" ? (
+              <InfoQuickPanel
+                onPickAction={(p) => {
+                  setDraft(p);
+                  setChatOpen(true);
+                }}
+              />
+            ) : null}
+          </Box>
+        )}
+      </Box>
+
+      {/* Chat dock wrapper (bounded when open) */}
+      <Box
+        sx={{
+          px: 1.5,
+          pb: 1.5,
+          flex: "0 0 auto",
+          height: chatOpen ? "calc(100% - 148px)" : "auto",
+          minHeight: chatOpen ? 0 : "auto",
+          overflow: "hidden",
+        }}
+      >
         <GovChatDock
+          open={chatOpen}
+          onOpenChangeAction={setChatOpen}
           thread={thread}
           onThreadChange={(updater) => setThread((prev) => updater(prev))}
           onSubmitAction={(prompt) => {
-            // Hook point for later (open right panel, call backend, etc.)
+            // eslint-disable-next-line no-console
             console.log("Chat prompt:", prompt);
           }}
+          draft={draft}
+          onDraftChangeAction={setDraft}
         />
       </Box>
     </Box>

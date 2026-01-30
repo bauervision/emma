@@ -1,11 +1,10 @@
-import * as React from "react";
-import { Suspense } from "react";
+//app/distribution/page.tsx
 import DistributionClient from "./DistributionClient";
 
-export default function Page() {
-  return (
-    <Suspense fallback={<div style={{ padding: 24 }}>Loading…</div>}>
-      <DistributionClient />
-    </Suspense>
-  );
-}
+import { withSuspense } from "@/components/shell/withSuspense";
+
+export default withSuspense(DistributionClient, {
+  label: "Distribution",
+  minMs: 900,
+  maxMs: 1700,
+});

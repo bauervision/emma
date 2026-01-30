@@ -1,11 +1,9 @@
-import * as React from "react";
-import { Suspense } from "react";
+// app/ce/page.tsx
 import CeClient from "./CeClient";
+import { withSuspense } from "@/components/shell/withSuspense";
 
-export default function Page() {
-  return (
-    <Suspense fallback={<div style={{ padding: 24 }}>Loading…</div>}>
-      <CeClient />
-    </Suspense>
-  );
-}
+export default withSuspense(CeClient, {
+  label: "C&E",
+  minMs: 900,
+  maxMs: 1700,
+});

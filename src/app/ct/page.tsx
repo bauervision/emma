@@ -1,11 +1,10 @@
-import * as React from "react";
-import { Suspense } from "react";
+//app/ct/page.tsx
 import CtClient from "./CtClient";
 
-export default function Page() {
-  return (
-    <Suspense fallback={<div style={{ padding: 24 }}>Loading…</div>}>
-      <CtClient />
-    </Suspense>
-  );
-}
+import { withSuspense } from "@/components/shell/withSuspense";
+
+export default withSuspense(CtClient, {
+  label: "C&T",
+  minMs: 900,
+  maxMs: 1700,
+});

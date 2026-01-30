@@ -1,3 +1,4 @@
+//app/ce/CeClient.tsx
 "use client";
 
 import RequireSession from "@/components/auth/RequireSession";
